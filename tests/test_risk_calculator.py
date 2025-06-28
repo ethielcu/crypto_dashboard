@@ -1,7 +1,7 @@
 import unittest
 import pandas as pd
 import numpy as np
-from src.crypto_dashboard.risk import RiskCalculator
+from src.crypto_dashboard.risk.risk_calculator import RiskCalculator
 
 
 class TestRiskCalculator(unittest.TestCase):
