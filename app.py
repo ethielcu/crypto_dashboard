@@ -4,9 +4,9 @@ import numpy as np
 from datetime import datetime, timedelta
 import time
 
-from market_data import MarketDataFetcher
-from visualizations import CryptoVisualizer
-from risk_calculator import RiskCalculator, PortfolioOptimizer
+from src.crypto_dashboard.data import MarketDataFetcher
+from src.crypto_dashboard.visualization import CryptoVisualizer
+from src.crypto_dashboard.risk import RiskCalculator, PortfolioOptimizer
 
 st.set_page_config(
     page_title="Crypto Dashboard & Risk Calculator",
