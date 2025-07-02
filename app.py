@@ -3,10 +3,19 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import time
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from src.crypto_dashboard.data.market_data import MarketDataFetcher
 from src.crypto_dashboard.visualization.visualizations import CryptoVisualizer
 from src.crypto_dashboard.risk.risk_calculator import RiskCalculator, PortfolioOptimizer
+from src.crypto_dashboard.analytics import (
+    TechnicalIndicators, CorrelationAnalyzer, BacktestEngine,
+    SimpleMovingAverageStrategy, RSIStrategy, MACDStrategy,
+    AlertSystem, SentimentAnalyzer
+)
+from src.crypto_dashboard.data.multi_exchange_data import MultiExchangeDataManager
+from src.crypto_dashboard.utils.export_utils import ExportManager
 
 st.set_page_config(
     page_title="Crypto Dashboard & Risk Calculator",
@@ -17,26 +26,34 @@ st.set_page_config(
 
 @st.cache_resource
 def init_components():
-    return MarketDataFetcher(), CryptoVisualizer(), RiskCalculator(), PortfolioOptimizer()
+    return (
+        MarketDataFetcher(), CryptoVisualizer(), RiskCalculator(), PortfolioOptimizer(),
+        TechnicalIndicators(), CorrelationAnalyzer(), BacktestEngine(),
+        AlertSystem(), SentimentAnalyzer(), MultiExchangeDataManager(), ExportManager()
+    )
 
 @st.cache_data(ttl=300)
 def fetch_top_cryptos(limit=50):
-    fetcher, _, _, _ = init_components()
+    components = init_components()
+    fetcher = components[0]
     return fetcher.get_top_cryptos(limit)
 
 @st.cache_data(ttl=600)
 def fetch_price_history(coin_id, days):
-    fetcher, _, _, _ = init_components()
+    components = init_components()
+    fetcher = components[0]
     return fetcher.get_price_history(coin_id, days)
 
 @st.cache_data(ttl=300)
 def fetch_fear_greed_index():
-    fetcher, _, _, _ = init_components()
+    components = init_components()
+    fetcher = components[0]
     return fetcher.get_fear_greed_index()
 
 @st.cache_data(ttl=600)
 def fetch_global_market_data():
-    fetcher, _, _, _ = init_components()
+    components = init_components()
+    fetcher = components[0]
     return fetcher.get_global_market_data()
 
 def main():
@@ -46,10 +63,13 @@ def main():
     st.sidebar.title("Navigation")
     page = st.sidebar.selectbox(
         "Choose a page:",
-        ["Market Overview", "Price Analysis", "Risk Calculator", "Portfolio Optimizer"]
+        ["Market Overview", "Price Analysis", "Risk Calculator", "Portfolio Optimizer", 
+         "Advanced Analytics", "Multi-Exchange Data", "Alerts & Monitoring"]
     )
     
-    fetcher, visualizer, risk_calc, optimizer = init_components()
+    components = init_components()
+    fetcher, visualizer, risk_calc, optimizer = components[:4]
+    tech_indicators, corr_analyzer, backtest_engine, alert_system, sentiment_analyzer, multi_exchange, export_manager = components[4:]
     
     if page == "Market Overview":
         market_overview_page(fetcher, visualizer)
@@ -59,6 +79,12 @@ def main():
         risk_calculator_page(risk_calc)
     elif page == "Portfolio Optimizer":
         portfolio_optimizer_page(fetcher, risk_calc, optimizer)
+    elif page == "Advanced Analytics":
+        advanced_analytics_page(fetcher, visualizer, tech_indicators, corr_analyzer, backtest_engine, sentiment_analyzer, export_manager)
+    elif page == "Multi-Exchange Data":
+        multi_exchange_page(multi_exchange, visualizer, export_manager)
+    elif page == "Alerts & Monitoring":
+        alerts_monitoring_page(alert_system, fetcher, sentiment_analyzer)
 
 def market_overview_page(fetcher, visualizer):
     st.header("Market Overview")
@@ -403,6 +429,321 @@ def portfolio_optimizer_page(fetcher, risk_calc, optimizer):
         
         if not rebalancing_needed:
             st.success("Portfolio is well balanced")
+
+def advanced_analytics_page(fetcher, visualizer, tech_indicators, corr_analyzer, backtest_engine, sentiment_analyzer, export_manager):
+    st.header("Advanced Analytics")
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["Technical Analysis", "Correlation Analysis", "Backtesting", "Sentiment Analysis"])
+    
+    with tab1:
+        st.subheader("Technical Indicators")
+        
+        top_cryptos = fetch_top_cryptos(50)
+        if top_cryptos.empty:
+            st.error("Unable to fetch cryptocurrency data.")
+            return
+        
+        coin_options = {row['Name']: row['ID'] for _, row in top_cryptos.iterrows()}
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_coin = st.selectbox("Select Cryptocurrency:", list(coin_options.keys()), key="tech_coin")
+        with col2:
+            time_period = st.selectbox("Time Period:", [30, 90, 180, 365], format_func=lambda x: f"{x} days", key="tech_period")
+        
+        coin_id = coin_options[selected_coin]
+        price_data = fetch_price_history(coin_id, time_period)
+        
+        if not price_data.empty:
+            df = price_data.copy()
+            df.columns = ['close', 'volume']
+            df['high'] = df['close'] * (1 + np.random.uniform(0, 0.02, len(df)))
+            df['low'] = df['close'] * (1 - np.random.uniform(0, 0.02, len(df)))
+            df['open'] = df['close'].shift(1).fillna(df['close'].iloc[0])
+            
+            indicators_df = tech_indicators.calculate_all_indicators(df)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Price with Moving Averages")
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['close'], name='Price', line=dict(color='blue')))
+                if 'sma_20' in indicators_df:
+                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['sma_20'], name='SMA 20', line=dict(color='orange')))
+                if 'sma_50' in indicators_df:
+                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['sma_50'], name='SMA 50', line=dict(color='red')))
+                
+                fig.update_layout(title=f"{selected_coin} Price with Moving Averages", xaxis_title="Date", yaxis_title="Price")
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                st.subheader("RSI Indicator")
+                if 'rsi' in indicators_df:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['rsi'], name='RSI', line=dict(color='purple')))
+                    fig.add_hline(y=70, line_dash="dash", line_color="red", annotation_text="Overbought")
+                    fig.add_hline(y=30, line_dash="dash", line_color="green", annotation_text="Oversold")
+                    fig.update_layout(title="RSI (14)", xaxis_title="Date", yaxis_title="RSI", yaxis=dict(range=[0, 100]))
+                    st.plotly_chart(fig, use_container_width=True)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("MACD")
+                if all(col in indicators_df for col in ['macd', 'macd_signal', 'macd_histogram']):
+                    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1)
+                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['macd'], name='MACD', line=dict(color='blue')), row=1, col=1)
+                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['macd_signal'], name='Signal', line=dict(color='red')), row=1, col=1)
+                    fig.add_trace(go.Bar(x=indicators_df.index, y=indicators_df['macd_histogram'], name='Histogram'), row=2, col=1)
+                    fig.update_layout(title="MACD Indicator", height=400)
+                    st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                st.subheader("Bollinger Bands")
+                if all(col in indicators_df for col in ['bb_upper', 'bb_middle', 'bb_lower']):
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['bb_upper'], name='Upper Band', line=dict(color='red', dash='dash')))
+                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['bb_middle'], name='Middle Band', line=dict(color='blue')))
+                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['bb_lower'], name='Lower Band', line=dict(color='red', dash='dash')))
+                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['close'], name='Price', line=dict(color='black')))
+                    fig.update_layout(title="Bollinger Bands", xaxis_title="Date", yaxis_title="Price")
+                    st.plotly_chart(fig, use_container_width=True)
+    
+    with tab2:
+        st.subheader("Correlation Analysis")
+        
+        selected_assets = st.multiselect(
+            "Select assets for correlation analysis:",
+            options=list(coin_options.keys())[:10],
+            default=list(coin_options.keys())[:5],
+            key="corr_assets"
+        )
+        
+        if len(selected_assets) >= 2:
+            price_data_dict = {}
+            
+            with st.spinner("Fetching price data for correlation analysis..."):
+                for asset in selected_assets:
+                    coin_id = coin_options[asset]
+                    data = fetch_price_history(coin_id, 90)
+                    if not data.empty:
+                        price_data_dict[asset] = data['price']
+            
+            if price_data_dict:
+                price_df = pd.DataFrame(price_data_dict)
+                returns_df = corr_analyzer.calculate_returns(price_df)
+                corr_matrix = corr_analyzer.calculate_correlation_matrix(returns_df)
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.subheader("Correlation Matrix")
+                    corr_fig = corr_analyzer.create_correlation_heatmap(corr_matrix)
+                    st.plotly_chart(corr_fig, use_container_width=True)
+                
+                with col2:
+                    st.subheader("Correlation Statistics")
+                    st.dataframe(corr_matrix.round(3))
+                
+                clusters = corr_analyzer.identify_correlation_clusters(threshold=0.7)
+                if clusters:
+                    st.subheader("High Correlation Clusters")
+                    for cluster_name, assets in clusters.items():
+                        st.write(f"**{cluster_name}**: {', '.join(assets)}")
+    
+    with tab3:
+        st.subheader("Strategy Backtesting")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            backtest_coin = st.selectbox("Select Asset:", list(coin_options.keys()), key="backtest_coin")
+            strategy_type = st.selectbox("Strategy Type:", ["Simple Moving Average", "RSI", "MACD"])
+        
+        with col2:
+            backtest_period = st.selectbox("Backtest Period:", [90, 180, 365], format_func=lambda x: f"{x} days")
+            initial_capital = st.number_input("Initial Capital ($):", min_value=1000, value=10000, step=1000)
+        
+        if st.button("Run Backtest"):
+            coin_id = coin_options[backtest_coin]
+            price_data = fetch_price_history(coin_id, backtest_period)
+            
+            if not price_data.empty:
+                df = price_data.copy()
+                df.columns = ['close', 'volume']
+                df['high'] = df['close'] * (1 + np.random.uniform(0, 0.02, len(df)))
+                df['low'] = df['close'] * (1 - np.random.uniform(0, 0.02, len(df)))
+                df['open'] = df['close'].shift(1).fillna(df['close'].iloc[0])
+                
+                if strategy_type == "Simple Moving Average":
+                    strategy = SimpleMovingAverageStrategy(20, 50)
+                elif strategy_type == "RSI":
+                    strategy = RSIStrategy()
+                else:
+                    strategy = MACDStrategy()
+                
+                backtest_engine.initial_capital = initial_capital
+                result = backtest_engine.run_backtest(df, strategy)
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.subheader("Performance Metrics")
+                    st.metric("Total Return", f"{result.metrics['total_return']:.2%}")
+                    st.metric("Annual Return", f"{result.metrics['annual_return']:.2%}")
+                    st.metric("Sharpe Ratio", f"{result.metrics['sharpe_ratio']:.3f}")
+                    st.metric("Max Drawdown", f"{result.metrics['max_drawdown']:.2%}")
+                
+                with col2:
+                    st.metric("Win Rate", f"{result.metrics['win_rate']:.2%}")
+                    st.metric("Total Trades", f"{result.metrics['total_trades']:.0f}")
+                    st.metric("Profit Factor", f"{result.metrics['profit_factor']:.2f}")
+                    st.metric("Buy & Hold Return", f"{result.metrics['buy_hold_return']:.2%}")
+                
+                performance_fig = backtest_engine.create_performance_chart(result, df)
+                st.plotly_chart(performance_fig, use_container_width=True)
+    
+    with tab4:
+        st.subheader("Market Sentiment Analysis")
+        
+        fg_data = sentiment_analyzer.get_fear_greed_index()
+        fg_history = sentiment_analyzer.get_fear_greed_history(30)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fg_gauge = sentiment_analyzer.create_fear_greed_gauge(fg_data['value'], fg_data['classification'])
+            st.plotly_chart(fg_gauge, use_container_width=True)
+        
+        with col2:
+            fg_history_chart = sentiment_analyzer.create_fear_greed_history_chart(fg_history)
+            st.plotly_chart(fg_history_chart, use_container_width=True)
+        
+        sentiment_trend = sentiment_analyzer.analyze_sentiment_trend(fg_history)
+        signals = sentiment_analyzer.get_sentiment_signals(fg_data['value'])
+        
+        st.subheader("Sentiment Analysis")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.metric("Current Sentiment", fg_data['classification'])
+            st.metric("Trend", sentiment_trend['trend'].title())
+            st.metric("Volatility", f"{sentiment_trend['volatility']:.1f}")
+        
+        with col2:
+            st.subheader("Trading Signals")
+            for signal in signals:
+                st.write(f"• {signal}")
+
+def multi_exchange_page(multi_exchange, visualizer, export_manager):
+    st.header("Multi-Exchange Data")
+    
+    st.subheader("Price Comparison Across Exchanges")
+    
+    symbols = ['bitcoin', 'ethereum', 'cardano', 'solana', 'polkadot']
+    selected_symbols = st.multiselect("Select cryptocurrencies:", symbols, default=symbols[:3])
+    
+    if selected_symbols and st.button("Fetch Multi-Exchange Prices"):
+        with st.spinner("Fetching prices from multiple exchanges..."):
+            prices_df = multi_exchange.get_multi_exchange_prices(selected_symbols)
+        
+        if not prices_df.empty:
+            st.subheader("Current Prices")
+            st.dataframe(prices_df.round(2))
+            
+            arbitrage_opps = multi_exchange.get_arbitrage_opportunities(selected_symbols, min_diff_pct=0.1)
+            
+            if not arbitrage_opps.empty:
+                st.subheader("Arbitrage Opportunities")
+                st.dataframe(arbitrage_opps[['buy_exchange', 'sell_exchange', 'buy_price', 'sell_price', 'price_diff_pct']].round(3))
+            else:
+                st.info("No significant arbitrage opportunities found")
+    
+    st.subheader("Exchange Reliability")
+    reliability_stats = multi_exchange.get_exchange_reliability_stats()
+    if not reliability_stats.empty:
+        st.dataframe(reliability_stats)
+    
+    st.subheader("Data Export")
+    if st.button("Export Multi-Exchange Data"):
+        if selected_symbols:
+            filepath = f"multi_exchange_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            multi_exchange.export_data(filepath, selected_symbols, days=30)
+            st.success(f"Data exported to {filepath}")
+
+def alerts_monitoring_page(alert_system, fetcher, sentiment_analyzer):
+    st.header("Alerts & Monitoring")
+    
+    tab1, tab2, tab3 = st.tabs(["Create Alerts", "Active Alerts", "Alert History"])
+    
+    with tab1:
+        st.subheader("Create New Alert")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            asset = st.text_input("Asset (e.g., bitcoin):", value="bitcoin")
+            condition = st.selectbox("Condition:", [
+                'price_above', 'price_below', 'price_change_percent',
+                'volume_above', 'volume_below', 'rsi_above', 'rsi_below',
+                'macd_bullish_crossover', 'macd_bearish_crossover'
+            ])
+        
+        with col2:
+            threshold = st.number_input("Threshold:", value=50000.0)
+            message = st.text_input("Custom Message (optional):")
+        
+        if st.button("Create Alert"):
+            alert_id = alert_system.create_alert(asset, condition, threshold, message)
+            st.success(f"Alert created with ID: {alert_id}")
+    
+    with tab2:
+        st.subheader("Active Alerts")
+        
+        active_alerts = alert_system.get_active_alerts()
+        
+        if active_alerts:
+            for alert in active_alerts:
+                col1, col2, col3 = st.columns([3, 1, 1])
+                
+                with col1:
+                    st.write(f"**{alert.asset}** - {alert.condition} {alert.threshold}")
+                    st.write(f"Message: {alert.message}")
+                
+                with col2:
+                    if st.button("Deactivate", key=f"deactivate_{alert.alert_id}"):
+                        alert_system.deactivate_alert(alert.alert_id)
+                        st.rerun()
+                
+                with col3:
+                    if st.button("Delete", key=f"delete_{alert.alert_id}"):
+                        alert_system.remove_alert(alert.alert_id)
+                        st.rerun()
+                
+                st.markdown("---")
+        else:
+            st.info("No active alerts")
+        
+        stats = alert_system.get_alert_statistics()
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Alerts", stats['total_alerts'])
+        with col2:
+            st.metric("Active Alerts", stats['active_alerts'])
+        with col3:
+            st.metric("Triggered Today", stats['triggered_today'])
+    
+    with tab3:
+        st.subheader("Recent Alert Triggers")
+        
+        triggered_alerts = alert_system.get_triggered_alerts(hours=168)
+        
+        if triggered_alerts:
+            for alert in triggered_alerts[-10:]:
+                st.write(f"**{alert.triggered_at.strftime('%Y-%m-%d %H:%M')}** - {alert.message}")
+        else:
+            st.info("No recent alert triggers")
 
 if __name__ == "__main__":
     main()
