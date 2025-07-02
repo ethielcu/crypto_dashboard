@@ -61,7 +61,7 @@ class SentimentAnalyzer:
                 records = []
                 for entry in data['data']:
                     records.append({
-                        'date': pd.to_datetime(entry['timestamp'], unit='s'),
+                        'date': pd.to_datetime(int(entry['timestamp']), unit='s'),
                         'value': int(entry['value']),
                         'classification': entry['value_classification']
                     })
