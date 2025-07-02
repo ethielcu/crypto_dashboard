@@ -133,7 +133,7 @@ class ExportManager:
         elements.append(Paragraph(title, title_style))
         
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        elements.append(Paragraph(f"Generated on: {timestamp}", styles['Normal']))
+        elements.append(Paragraph(f"Created on: {timestamp}", styles['Normal']))
         elements.append(Spacer(1, 12))
         
         if not df.empty:
@@ -207,7 +207,7 @@ class ExportManager:
         </head>
         <body>
             <h1>{title}</h1>
-            <div class="timestamp">Generated on: {timestamp}</div>
+            <div class="timestamp">Created on: {timestamp}</div>
         """
         
         if not df.empty:
@@ -303,7 +303,7 @@ class ExportManager:
             elements.append(Paragraph(title, title_style))
             
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            elements.append(Paragraph(f"Generated on: {timestamp}", styles['Normal']))
+            elements.append(Paragraph(f"Created on: {timestamp}", styles['Normal']))
             elements.append(Spacer(1, 20))
             
             for section_name, section_data in data_dict.items():
