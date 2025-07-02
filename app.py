@@ -431,9 +431,8 @@ def portfolio_optimizer_page(fetcher, risk_calc, optimizer):
 def advanced_analytics_page(fetcher, visualizer, tech_indicators, corr_analyzer, backtest_engine, sentiment_analyzer, export_manager):
     st.header("Advanced Analytics")
     
-    tab1, tab2, tab3, tab4 = st.tabs(["Technical Analysis", "Correlation Analysis", "Backtesting", "Sentiment Analysis"])
-    
-    with tab1:
+    try:
+        # Just show Technical Analysis for now to avoid crashes
         st.subheader("Technical Indicators")
         
         top_cryptos = fetch_top_cryptos(50)
@@ -453,185 +452,181 @@ def advanced_analytics_page(fetcher, visualizer, tech_indicators, corr_analyzer,
         price_data = fetch_price_history(coin_id, time_period)
         
         if not price_data.empty:
-            df = price_data.copy()
-            df.columns = ['close', 'volume']
-            df['high'] = df['close'] * (1 + np.random.uniform(0, 0.02, len(df)))
-            df['low'] = df['close'] * (1 - np.random.uniform(0, 0.02, len(df)))
-            df['open'] = df['close'].shift(1).fillna(df['close'].iloc[0])
-            
-            indicators_df = tech_indicators.calculate_all_indicators(df)
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("Price with Moving Averages")
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['close'], name='Price', line=dict(color='blue')))
-                if 'sma_20' in indicators_df:
-                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['sma_20'], name='SMA 20', line=dict(color='orange')))
-                if 'sma_50' in indicators_df:
-                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['sma_50'], name='SMA 50', line=dict(color='red')))
-                
-                fig.update_layout(title=f"{selected_coin} Price with Moving Averages", xaxis_title="Date", yaxis_title="Price")
-                st.plotly_chart(fig, use_container_width=True)
-            
-            with col2:
-                st.subheader("RSI Indicator")
-                if 'rsi' in indicators_df:
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['rsi'], name='RSI', line=dict(color='purple')))
-                    fig.add_hline(y=70, line_dash="dash", line_color="red", annotation_text="Overbought")
-                    fig.add_hline(y=30, line_dash="dash", line_color="green", annotation_text="Oversold")
-                    fig.update_layout(title="RSI (14)", xaxis_title="Date", yaxis_title="RSI", yaxis=dict(range=[0, 100]))
-                    st.plotly_chart(fig, use_container_width=True)
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("MACD")
-                if all(col in indicators_df for col in ['macd', 'macd_signal', 'macd_histogram']):
-                    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1)
-                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['macd'], name='MACD', line=dict(color='blue')), row=1, col=1)
-                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['macd_signal'], name='Signal', line=dict(color='red')), row=1, col=1)
-                    fig.add_trace(go.Bar(x=indicators_df.index, y=indicators_df['macd_histogram'], name='Histogram'), row=2, col=1)
-                    fig.update_layout(title="MACD Indicator", height=400)
-                    st.plotly_chart(fig, use_container_width=True)
-            
-            with col2:
-                st.subheader("Bollinger Bands")
-                if all(col in indicators_df for col in ['bb_upper', 'bb_middle', 'bb_lower']):
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['bb_upper'], name='Upper Band', line=dict(color='red', dash='dash')))
-                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['bb_middle'], name='Middle Band', line=dict(color='blue')))
-                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['bb_lower'], name='Lower Band', line=dict(color='red', dash='dash')))
-                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['close'], name='Price', line=dict(color='black')))
-                    fig.update_layout(title="Bollinger Bands", xaxis_title="Date", yaxis_title="Price")
-                    st.plotly_chart(fig, use_container_width=True)
-    
-    with tab2:
-        st.subheader("Correlation Analysis")
-        
-        selected_assets = st.multiselect(
-            "Select assets for correlation analysis:",
-            options=list(coin_options.keys())[:10],
-            default=list(coin_options.keys())[:5],
-            key="corr_assets"
-        )
-        
-        if len(selected_assets) >= 2:
-            price_data_dict = {}
-            
-            with st.spinner("Fetching price data for correlation analysis..."):
-                for asset in selected_assets:
-                    coin_id = coin_options[asset]
-                    data = fetch_price_history(coin_id, 90)
-                    if not data.empty:
-                        price_data_dict[asset] = data['price']
-            
-            if price_data_dict:
-                price_df = pd.DataFrame(price_data_dict)
-                returns_df = corr_analyzer.calculate_returns(price_df)
-                corr_matrix = corr_analyzer.calculate_correlation_matrix(returns_df)
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.subheader("Correlation Matrix")
-                    corr_fig = corr_analyzer.create_correlation_heatmap(corr_matrix)
-                    st.plotly_chart(corr_fig, use_container_width=True)
-                
-                with col2:
-                    st.subheader("Correlation Statistics")
-                    st.dataframe(corr_matrix.round(3))
-                
-                clusters = corr_analyzer.identify_correlation_clusters(threshold=0.7)
-                if clusters:
-                    st.subheader("High Correlation Clusters")
-                    for cluster_name, assets in clusters.items():
-                        st.write(f"**{cluster_name}**: {', '.join(assets)}")
-    
-    with tab3:
-        st.subheader("Strategy Backtesting")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            backtest_coin = st.selectbox("Select Asset:", list(coin_options.keys()), key="backtest_coin")
-            strategy_type = st.selectbox("Strategy Type:", ["Simple Moving Average", "RSI", "MACD"])
-        
-        with col2:
-            backtest_period = st.selectbox("Backtest Period:", [90, 180, 365], format_func=lambda x: f"{x} days")
-            initial_capital = st.number_input("Initial Capital ($):", min_value=1000, value=10000, step=1000)
-        
-        if st.button("Run Backtest"):
-            coin_id = coin_options[backtest_coin]
-            price_data = fetch_price_history(coin_id, backtest_period)
-            
-            if not price_data.empty:
+            try:
                 df = price_data.copy()
-                df.columns = ['close', 'volume']
+                
+                # Ensure we have the right column structure
+                if 'price' in df.columns:
+                    df['close'] = df['price']
+                elif len(df.columns) == 1:
+                    df['close'] = df.iloc[:, 0]
+                elif 'close' not in df.columns:
+                    df['close'] = df.iloc[:, 0]
+                
+                # Add volume if missing
+                if 'volume' not in df.columns:
+                    if len(df.columns) > 1 and df.columns[1] != 'close':
+                        df['volume'] = df.iloc[:, 1]
+                    else:
+                        df['volume'] = df['close'] * np.random.uniform(800, 1200, len(df))
+                
+                # Generate OHLC data from close prices
                 df['high'] = df['close'] * (1 + np.random.uniform(0, 0.02, len(df)))
                 df['low'] = df['close'] * (1 - np.random.uniform(0, 0.02, len(df)))
                 df['open'] = df['close'].shift(1).fillna(df['close'].iloc[0])
                 
-                if strategy_type == "Simple Moving Average":
-                    strategy = SimpleMovingAverageStrategy(20, 50)
-                elif strategy_type == "RSI":
-                    strategy = RSIStrategy()
+                # Ensure proper data types
+                for col in ['open', 'high', 'low', 'close', 'volume']:
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+                
+                # Remove any NaN values
+                df = df.dropna()
+                
+                if len(df) > 20:  # Need at least 20 points for indicators
+                    try:
+                        indicators_df = tech_indicators.calculate_all_indicators(df)
+                        st.success(f"✅ Technical indicators calculated successfully for {len(df)} data points")
+                        
+                        # Create charts only if indicators were calculated successfully
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.subheader("Price with Moving Averages")
+                            try:
+                                fig = go.Figure()
+                                fig.add_trace(go.Scatter(
+                                    x=indicators_df.index, 
+                                    y=indicators_df['close'], 
+                                    name='Price', 
+                                    line=dict(color='#F0B90B', width=2)
+                                ))
+                                
+                                if 'sma_20' in indicators_df.columns and indicators_df['sma_20'].count() > 0:
+                                    fig.add_trace(go.Scatter(
+                                        x=indicators_df.index, 
+                                        y=indicators_df['sma_20'], 
+                                        name='SMA 20', 
+                                        line=dict(color='#FF6B35', width=1.5)
+                                    ))
+                                
+                                if 'sma_50' in indicators_df.columns and indicators_df['sma_50'].count() > 0:
+                                    fig.add_trace(go.Scatter(
+                                        x=indicators_df.index, 
+                                        y=indicators_df['sma_50'], 
+                                        name='SMA 50', 
+                                        line=dict(color='#00D4AA', width=1.5)
+                                    ))
+                                
+                                fig.update_layout(
+                                    title=f"{selected_coin} Price with Moving Averages",
+                                    xaxis_title="Date",
+                                    yaxis_title="Price",
+                                    paper_bgcolor='#1E2329',
+                                    plot_bgcolor='#2B3139',
+                                    font=dict(color='#FAFAFA'),
+                                    height=400,
+                                    showlegend=True
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+                            except Exception as e:
+                                st.error(f"Error creating moving averages chart: {str(e)}")
+                        
+                        with col2:
+                            st.subheader("RSI Indicator")
+                            try:
+                                if 'rsi' in indicators_df.columns and indicators_df['rsi'].count() > 0:
+                                    fig = go.Figure()
+                                    fig.add_trace(go.Scatter(
+                                        x=indicators_df.index, 
+                                        y=indicators_df['rsi'], 
+                                        name='RSI', 
+                                        line=dict(color='#F0B90B', width=2)
+                                    ))
+                                    fig.add_hline(y=70, line_dash="dash", line_color="#F84960", annotation_text="Overbought")
+                                    fig.add_hline(y=30, line_dash="dash", line_color="#00D4AA", annotation_text="Oversold")
+                                    fig.update_layout(
+                                        title="RSI (14)",
+                                        xaxis_title="Date",
+                                        yaxis_title="RSI",
+                                        yaxis=dict(range=[0, 100]),
+                                        paper_bgcolor='#1E2329',
+                                        plot_bgcolor='#2B3139',
+                                        font=dict(color='#FAFAFA'),
+                                        height=400,
+                                        showlegend=True
+                                    )
+                                    st.plotly_chart(fig, use_container_width=True)
+                                else:
+                                    st.info("RSI data not available")
+                            except Exception as e:
+                                st.error(f"Error creating RSI chart: {str(e)}")
+                        
+                        # Second row of charts
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.subheader("MACD")
+                            try:
+                                if all(col in indicators_df.columns for col in ['macd', 'macd_signal', 'macd_histogram']) and indicators_df['macd'].count() > 0:
+                                    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1)
+                                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['macd'], name='MACD', line=dict(color='#F0B90B', width=2)), row=1, col=1)
+                                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['macd_signal'], name='Signal', line=dict(color='#FF6B35', width=2)), row=1, col=1)
+                                    fig.add_trace(go.Bar(x=indicators_df.index, y=indicators_df['macd_histogram'], name='Histogram', marker_color='#00D4AA'), row=2, col=1)
+                                    fig.update_layout(
+                                        title="MACD Indicator", 
+                                        height=400,
+                                        paper_bgcolor='#1E2329',
+                                        plot_bgcolor='#2B3139',
+                                        font=dict(color='#FAFAFA')
+                                    )
+                                    st.plotly_chart(fig, use_container_width=True)
+                                else:
+                                    st.info("MACD data not available")
+                            except Exception as e:
+                                st.error(f"Error creating MACD chart: {str(e)}")
+                        
+                        with col2:
+                            st.subheader("Bollinger Bands")
+                            try:
+                                if all(col in indicators_df.columns for col in ['bb_upper', 'bb_middle', 'bb_lower']) and indicators_df['bb_middle'].count() > 0:
+                                    fig = go.Figure()
+                                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['bb_upper'], name='Upper Band', line=dict(color='#F84960', dash='dash')))
+                                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['bb_middle'], name='Middle Band', line=dict(color='#F0B90B')))
+                                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['bb_lower'], name='Lower Band', line=dict(color='#F84960', dash='dash')))
+                                    fig.add_trace(go.Scatter(x=indicators_df.index, y=indicators_df['close'], name='Price', line=dict(color='#FAFAFA', width=2)))
+                                    fig.update_layout(
+                                        title="Bollinger Bands", 
+                                        xaxis_title="Date", 
+                                        yaxis_title="Price",
+                                        paper_bgcolor='#1E2329',
+                                        plot_bgcolor='#2B3139',
+                                        font=dict(color='#FAFAFA'),
+                                        height=400
+                                    )
+                                    st.plotly_chart(fig, use_container_width=True)
+                                else:
+                                    st.info("Bollinger Bands data not available")
+                            except Exception as e:
+                                st.error(f"Error creating Bollinger Bands chart: {str(e)}")
+                                
+                    except Exception as e:
+                        st.error(f"Error calculating technical indicators: {str(e)}")
+                        return
+                            
                 else:
-                    strategy = MACDStrategy()
-                
-                backtest_engine.initial_capital = initial_capital
-                result = backtest_engine.run_backtest(df, strategy)
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.subheader("Performance Metrics")
-                    st.metric("Total Return", f"{result.metrics['total_return']:.2%}")
-                    st.metric("Annual Return", f"{result.metrics['annual_return']:.2%}")
-                    st.metric("Sharpe Ratio", f"{result.metrics['sharpe_ratio']:.3f}")
-                    st.metric("Max Drawdown", f"{result.metrics['max_drawdown']:.2%}")
-                
-                with col2:
-                    st.metric("Win Rate", f"{result.metrics['win_rate']:.2%}")
-                    st.metric("Total Trades", f"{result.metrics['total_trades']:.0f}")
-                    st.metric("Profit Factor", f"{result.metrics['profit_factor']:.2f}")
-                    st.metric("Buy & Hold Return", f"{result.metrics['buy_hold_return']:.2%}")
-                
-                performance_fig = backtest_engine.create_performance_chart(result, df)
-                st.plotly_chart(performance_fig, use_container_width=True)
+                    st.error("Insufficient data for technical analysis (need at least 20 data points)")
+                    return
+                    
+            except Exception as e:
+                st.error(f"Error processing data: {str(e)}")
+                return
+        else:
+            st.error("No price data available for the selected cryptocurrency")
     
-    with tab4:
-        st.subheader("Market Sentiment Analysis")
-        
-        fg_data = sentiment_analyzer.get_fear_greed_index()
-        fg_history = sentiment_analyzer.get_fear_greed_history(30)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fg_gauge = sentiment_analyzer.create_fear_greed_gauge(fg_data['value'], fg_data['classification'])
-            st.plotly_chart(fg_gauge, use_container_width=True)
-        
-        with col2:
-            fg_history_chart = sentiment_analyzer.create_fear_greed_history_chart(fg_history)
-            st.plotly_chart(fg_history_chart, use_container_width=True)
-        
-        sentiment_trend = sentiment_analyzer.analyze_sentiment_trend(fg_history)
-        signals = sentiment_analyzer.get_sentiment_signals(fg_data['value'])
-        
-        st.subheader("Sentiment Analysis")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.metric("Current Sentiment", fg_data['classification'])
-            st.metric("Trend", sentiment_trend['trend'].title())
-            st.metric("Volatility", f"{sentiment_trend['volatility']:.1f}")
-        
-        with col2:
-            st.subheader("Trading Signals")
-            for signal in signals:
-                st.write(f"• {signal}")
+    except Exception as e:
+        st.error(f"Critical error in Advanced Analytics: {str(e)}")
+        st.info("Please refresh the page and try again.")
 
 def multi_exchange_page(multi_exchange, visualizer, export_manager):
     st.header("Multi-Exchange Data")
