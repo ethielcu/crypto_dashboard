@@ -19,8 +19,8 @@ from src.crypto_dashboard.utils.export_utils import ExportManager
 from src.crypto_dashboard.ui import apply_modern_theme, ModernComponents, ModernCharts
 
 st.set_page_config(
-    page_title="CryptoDash Pro - Advanced Trading Platform",
-    page_icon="⚡",
+    page_title="",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
