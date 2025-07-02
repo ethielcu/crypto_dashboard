@@ -38,6 +38,7 @@ def fetch_top_cryptos(limit=50):
     fetcher = components[0]
     return fetcher.get_top_cryptos(limit)
 
+@st.cache_data(ttl=600)
 def fetch_price_history(coin_id, days):
     components = init_components()
     fetcher = components[0]
@@ -59,7 +60,6 @@ def main():
     st.title("Cryptocurrency Dashboard & Risk Calculator")
     st.markdown("---")
     
-    st.sidebar.title("Navigation")
     page = st.sidebar.selectbox(
         "Choose a page:",
         ["Market Overview", "Price Analysis", "Risk Calculator", "Portfolio Optimizer", 
