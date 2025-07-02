@@ -40,9 +40,16 @@ def fetch_top_cryptos(limit=50):
 
 @st.cache_data(ttl=600)
 def fetch_price_history(coin_id, days):
-    components = init_components()
-    fetcher = components[0]
-    return fetcher.get_price_history(coin_id, days)
+    try:
+        components = init_components()
+        fetcher = components[0]
+        result = fetcher.get_price_history(coin_id, days)
+        if result.empty:
+            st.error(f"No data returned for {coin_id}")
+        return result
+    except Exception as e:
+        st.error(f"Error fetching data for {coin_id}: {e}")
+        return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def fetch_fear_greed_index():
