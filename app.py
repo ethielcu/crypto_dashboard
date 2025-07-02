@@ -387,7 +387,8 @@ def portfolio_optimizer_page(fetcher, risk_calc, optimizer):
         else:
             normalized_allocations = portfolio_allocations
         
-        _, visualizer, _, _ = init_components()
+        components = init_components()
+        visualizer = components[1]
         portfolio_fig = visualizer.create_portfolio_pie(normalized_allocations)
         st.plotly_chart(portfolio_fig, use_container_width=True)
         
